@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>排个座次</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f1ede6; color: #2a2622; line-height: 1.6; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 20px 14px 40px; }
+  h1 { font-size: 26px; letter-spacing: 2px; }
+  .lead { color: #5b544c; font-size: 14px; margin: 4px 0 14px; }
+  .card { background: #fffdf9; border-radius: 8px; padding: 14px; border: 1px solid #ddd3c4; margin-bottom: 14px; min-width: 0; }
+  .card h2 { font-size: 15px; color: #4a4038; font-weight: 600; margin-bottom: 8px; overflow-wrap: anywhere; }
+  textarea, input, select { font: inherit; font-size: 14px; padding: 6px 8px; border: 1px solid #b9ad9c; border-radius: 5px; width: 100%; min-width: 0; background: #fff; }
+  textarea { min-height: 220px; resize: vertical; font-family: ui-monospace, Menlo, "PingFang SC", monospace; line-height: 1.55; }
+  .bad { border-color: #b23a2b !important; background: #fff0ec !important; }
+  label { font-size: 12px; color: #6b6258; display: block; }
+  button { font: inherit; font-size: 13px; padding: 6px 11px; border-radius: 5px; border: 1px solid #7a3b2e; background: #7a3b2e; color: #fff; cursor: pointer; }
+  button.ghost { background: #fff; color: #7a3b2e; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; max-width: 420px; }
+  .quick { display: grid; grid-template-columns: minmax(0, 1fr) 56px 56px minmax(0, 1fr) auto; gap: 6px; align-items: end; margin-top: 10px; }
+  .presets, .dl { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .err { display: none; background: #fff0ec; border: 1px solid #e0b2a7; color: #8a2a1b; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; overflow-wrap: anywhere; }
+  .muted { color: #6b6258; font-size: 12px; }
+  #summary { font-size: 18px; font-weight: 700; overflow-wrap: anywhere; margin-bottom: 8px; }
+  #facts { margin: 8px 0 0 18px; font-size: 14px; } #facts li { margin: 3px 0; overflow-wrap: anywhere; }
+  /* 座次表 */
+  .seats { display: grid; gap: 6px; }
+  .seat { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; border: 1px solid #e6dccd; border-radius: 6px; padding: 7px 10px; background: #fff; }
+  .seat .no { font-size: 20px; font-weight: 800; color: #7a3b2e; text-align: center; font-variant-numeric: tabular-nums; }
+  .seat .nm { font-weight: 700; overflow-wrap: anywhere; }
+  .seat .sub { font-size: 12px; color: #6b6258; overflow-wrap: anywhere; }
+  .seat .sc { text-align: right; font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 700; }
+  .seat .sc small { display: block; font-size: 11px; font-weight: 400; color: #6b6258; }
+  .gap { font-size: 12px; margin: -2px 0 -2px 54px; color: #6b6258; overflow-wrap: anywhere; }
+  .gap.no { color: #a0522d; } .gap.yes { color: #3d6b4a; }
+  .gap::before { content: "↕ "; }
+  .bar { height: 6px; background: #efe6d8; border-radius: 3px; margin-top: 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: #c08a5a; }
+  svg { display: block; width: 100%; height: auto; } svg text { font-family: inherit; }
+  .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table.grid { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  table.grid th, table.grid td { border: 1px solid #e6dccd; padding: 4px 6px; text-align: center; white-space: nowrap; }
+  table.grid th { background: #f6f0e6; font-weight: 600; max-width: 7em; overflow: hidden; text-overflow: ellipsis; }
+  table.grid td small { display: block; font-size: 11px; color: #6b6258; }
+  table.grid td.self { background: #eee6da; }
+  #sugs { display: grid; gap: 8px; }
+  .sug { display: flex; gap: 10px; align-items: center; justify-content: space-between; border: 1px solid #e6dccd; border-radius: 6px; padding: 8px 10px; }
+  .sug span { min-width: 0; overflow-wrap: anywhere; font-size: 14px; } .sug button { flex: none; }
+  .how { font-size: 13px; color: #4a4038; } .how p { margin: 6px 0; } .how b { color: #2a2622; }
+  @media (max-width: 480px) {
+    .sug { flex-direction: column; align-items: stretch; } #summary { font-size: 16px; }
+    .quick { grid-template-columns: minmax(0, 1fr) 46px 46px minmax(0, 1fr); } .quick button { grid-column: 1 / -1; }
+    .seat { grid-template-columns: 34px minmax(0, 1fr) auto; gap: 8px; } .gap { margin-left: 42px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>排个座次</h1>
+  <p class="lead">一群人打球、下棋，谁跟谁打了几局很不均匀，光看胜率不公平：专挑弱的打，胜率自然好看。把交手记录贴进来，这里按「赢了谁、输给谁」一起算出每个人的实力分，排出座次，并告诉你相邻两个人到底分没分出高下、还要再打几局。默认例子是虚构的。</p>
+
+  <div class="card">
+    <h2>交手记录（一行一对人）</h2>
+    <label for="text">写法：「老王 5:3 小李」（老王赢 5 局、输 3 局），或「老王 胜 小李」「老王 输给 小李」算一局；# 开头的行不算，行尾括号里的备注不算</label>
+    <textarea id="text" spellcheck="false"></textarea>
+    <div class="quick">
+      <div><label for="qa">再记一场：谁</label><input id="qa" maxlength="12" placeholder="老王"></div>
+      <div><label for="qx">赢</label><input id="qx" inputmode="numeric" maxlength="3" value="1"></div>
+      <div><label for="qy">输</label><input id="qy" inputmode="numeric" maxlength="3" value="0"></div>
+      <div><label for="qb">对谁</label><input id="qb" maxlength="12" placeholder="小李"></div>
+      <button id="qadd">加一行</button>
+    </div>
+    <div class="row2">
+      <div><label for="prior">垫底局（每人跟中等水平各赢各输几局）</label><input id="prior" inputmode="decimal" maxlength="4"></div>
+      <div><label for="conf">「分得开」要多大把握</label><select id="conf"><option value="80">80%</option><option value="90">90%</option><option value="95">95%</option></select></div>
+    </div>
+    <div class="presets" id="presets"></div>
+  </div>
+
+  <div class="err" id="error"></div>
+
+  <div id="out">
+    <div class="card">
+      <div id="summary"></div>
+      <ul id="facts"></ul>
+    </div>
+    <div class="card">
+      <h2>座次（相邻两位之间写着分没分开）</h2>
+      <div class="seats" id="seats"></div>
+    </div>
+    <div class="card">
+      <h2>只看胜率 → 按交手算，名次怎么挪</h2>
+      <div id="slope"></div>
+    </div>
+    <div class="card">
+      <h2>谁对上谁有几成胜算（行的人赢列的人；小字是实际战绩）</h2>
+      <div class="scroll"><table class="grid" id="grid"></table></div>
+      <p class="muted" id="gridNote" style="margin-top:6px">胜算由实力分推出来，没交过手的两个人也有；实际战绩「—」表示没打过。</p>
+    </div>
+    <div class="card" id="sugCard">
+      <h2>再打几局会怎样（点一下把假设的局数加进记录重算）</h2>
+      <div id="sugs"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>带走结果</h2>
+    <div class="dl">
+      <button id="dlCSV">CSV 表格</button><button id="dlMD">Markdown 报告</button><button id="dlPNG">座次卡 PNG</button><button id="dlJSON" class="ghost">JSON 备份</button>
+      <button id="reset" class="ghost">恢复默认</button>
+    </div>
+    <p class="muted" style="margin-top:6px">记录自动保存在这台设备的浏览器里，刷新还在。</p>
+  </div>
+
+  <div class="card how">
+    <h2>怎么算的</h2>
+    <p><b>交手模型（Bradley–Terry）</b>：每人有一个实力值 θ，A 赢 B 的概率 = 1 ÷ (1 + e^(θB − θA))。找一组 θ，让「这些记录恰好发生」的可能性最大（最大似然，牛顿法求解）。赢了强的人加分多，赢了弱的人加分少，所以对手不同也能比。</p>
+    <p><b>垫底局</b>：每人先假装跟一个「中等水平」的人各赢各输几局（默认 1 局）。不然从来没输过的人分数会冲到无穷大。记录越多，垫底局影响越小；调大它，分数会往中间收。</p>
+    <p><b>实力分</b> = 1500 + 173.7 × (θ − 大家的平均 θ)。这个刻度下差 100 分，高的一方大约 64% 胜率，和常见的等级分是同一种刻度，但只在这群人里面有意义，不能拿去跟别的榜比。</p>
+    <p><b>分没分开</b>：两人 θ 的差除以它的标准误（由似然的曲率算出），换成「前者更强的把握」。到了你选的 80% / 90% / 95% 才算分开。这是正态近似，局数很少时只当参考。</p>
+    <p class="muted">没考虑：实力随时间变化、主客场与先后手、平局、比分大小（3:0 和 3:2 都只记胜负局数）。名次只说明这批记录，不是谁的真实水平定论。</p>
+  </div>
+</div>
+
+  <script>
+/* 排个座次 · 计算核心
+ * 一群人互相打球/下棋，谁跟谁打了几局很不均匀。只看胜率，专挑弱的打的人会被排高。
+ * 这里用 Bradley–Terry 模型：每人一个实力 θ，A 赢 B 的概率 = σ(θA − θB) = 1 / (1 + e^(θB − θA))。
+ * 用全部交手记录求最大似然的 θ（牛顿法，带回溯步长）。
+ * 垫底局：每人先跟一个「中等水平」(θ=0) 各赢各输 prior 局。没有它，从没输过的人 θ 会趋于无穷大；
+ *   它相当于一个温和的先验，局数越多影响越小。
+ * 实力分 = 1500 + 400/ln10 × (θ − 组内平均 θ)：差 100 分 ≈ 高的一方 64% 胜率（和常见等级分同一刻度）。
+ * 分不分得开：两人 θ 差 ÷ 差的标准误（取负海森矩阵的逆），换成「前者更强的把握」= Φ(差/标准误)，
+ *   与要求的把握（80/90/95%）比。这是近似（正态近似 + 垫底局），不是严格的检验。 */
+(function (root) {
+  'use strict';
+  const SCALE = 400 / Math.LN10, BASE = 1500;
+  /* 单侧分位：把握 ≥ 80% / 90% / 95% */
+  const ZONE = { '80': 0.8416212335729143, '90': 1.2815515655446004, '95': 1.6448536269514722 };
+  const MAXP = 12, MAXL = 200, MAXN = 999, MAXNAME = 12, MAXTEXT = 20000;
+
+  function Bad(message, field) { const e = new Error(message); e.field = field; return e; }
+  const short = (s) => (s.length > 24 ? s.slice(0, 24) + '…' : s);
+  function sig(x) { if (x >= 0) { const e = Math.exp(-x); return 1 / (1 + e); } const e = Math.exp(x); return e / (1 + e); }
+  function lse(a, b) { const m = Math.max(a, b); return m + Math.log1p(Math.exp(-Math.abs(a - b))); }
+  /* 标准正态分布函数（erfc 用 W. J. Cody 有理逼近的简化版：Numerical Recipes erfc，相对误差 < 1.2e-7） */
+  function Phi(x) {
+    const z = Math.abs(x) / Math.SQRT2, t = 1 / (1 + 0.5 * z);
+    const r = t * Math.exp(-z * z - 1.26551223 + t * (1.00002368 + t * (0.37409196 + t * (0.09678418 + t * (-0.18628806 + t * (0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (-0.82215223 + t * 0.17087277)))))))));
+    return x >= 0 ? 1 - r / 2 : r / 2;
+  }
+
+  const NOTE = /\s*[（(][^（）()]*[)）]\s*$/;
+  function parseLine(raw, no) {
+    let s = String(raw).replace(/\u3000/g, ' ').trim();
+    if (!s || s[0] === '#') return null;
+    s = s.replace(NOTE, '').trim();
+    if (!s) return null;
+    let m, a, b, x, y;
+    if ((m = s.match(/^(.+?)\s*(\d{1,4})\s*[:：比]\s*(\d{1,4})\s*(.+)$/))) { a = m[1]; x = +m[2]; y = +m[3]; b = m[4]; }
+    else if ((m = s.match(/^(.+?)\s+(?:赢了|胜了|赢|胜)\s+(.+)$/)) || (m = s.match(/^(.+?)(?:赢了|胜了|赢|胜)(.+)$/))) { a = m[1]; b = m[2]; x = 1; y = 0; }
+    else if ((m = s.match(/^(.+?)\s+(?:输给了|输给|输了|输)\s+(.+)$/)) || (m = s.match(/^(.+?)(?:输给了|输给|输了|输)(.+)$/))) { a = m[1]; b = m[2]; x = 0; y = 1; }
+    else throw Bad('第 ' + no + ' 行看不懂：「' + short(s) + '」。写成「老王 3:1 小李」或「老王 胜 小李」', 'text');
+    a = a.replace(/\s+/g, ' ').trim(); b = b.replace(/\s+/g, ' ').trim();
+    if (!a || !b) throw Bad('第 ' + no + ' 行少了人名', 'text');
+    if (a.length > MAXNAME || b.length > MAXNAME) throw Bad('第 ' + no + ' 行的名字太长（最多 ' + MAXNAME + ' 个字）', 'text');
+    if (a === b) throw Bad('第 ' + no + ' 行是「' + short(a) + '」自己跟自己打', 'text');
+    if (x > MAXN || y > MAXN) throw Bad('第 ' + no + ' 行局数太大（每行最多 ' + MAXN + ' 局）', 'text');
+    if (x + y === 0) throw Bad('第 ' + no + ' 行是 0:0，没有打', 'text');
+    return { a, b, x, y, no };
+  }
+
+  function parse(inp) {
+    inp = inp || {};
+    const text = String(inp.text == null ? '' : inp.text);
+    if (text.length > MAXTEXT) throw Bad('记录太长了（最多 ' + MAXTEXT + ' 字）', 'text');
+    const recs = [];
+    text.split(/\r?\n/).forEach((l, i) => { const r = parseLine(l, i + 1); if (r) recs.push(r); });
+    if (!recs.length) throw Bad('还没有交手记录：一行写一场，比如「老王 3:1 小李」', 'text');
+    if (recs.length > MAXL) throw Bad('记录最多 ' + MAXL + ' 行（现在 ' + recs.length + ' 行），同一对人可以合成一行', 'text');
+    const names = [];
+    recs.forEach((r) => { [r.a, r.b].forEach((nm) => { if (names.indexOf(nm) < 0) names.push(nm); }); });
+    if (names.length > MAXP) throw Bad('最多 ' + MAXP + ' 个人（现在 ' + names.length + ' 个）', 'text');
+    const n = names.length, w = names.map(() => new Array(n).fill(0));
+    let games = 0;
+    recs.forEach((r) => { const i = names.indexOf(r.a), j = names.indexOf(r.b); w[i][j] += r.x; w[j][i] += r.y; games += r.x + r.y; });
+    const ps = String(inp.prior == null ? '' : inp.prior).trim();
+    if (!/^\d+(\.\d+)?$/.test(ps)) throw Bad('垫底局数要填数字（现在是「' + short(ps) + '」）', 'prior');
+    const prior = Number(ps);
+    if (!(prior >= 0.1 && prior <= 20)) throw Bad('垫底局数要在 0.1 到 20 之间（现在是 ' + ps + '）', 'prior');
+    const conf = String(inp.conf);
+    if (!ZONE[conf]) throw Bad('把握只能选 80、90 或 95', 'conf');
+    return { names, n, w, recs, games, prior, conf, z: ZONE[conf], text };
+  }
+
+  /* 高斯消元（部分主元）解 A x = b；A 对称正定，n ≤ 12 */
+  function solve(A, b) {
+    const n = b.length, M = A.map((r, i) => r.slice().concat([b[i]]));
+    for (let c = 0; c < n; c++) {
+      let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+      const t = M[c]; M[c] = M[p]; M[p] = t;
+      for (let r = c + 1; r < n; r++) { const f = M[r][c] / M[c][c]; if (f) for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k]; }
+    }
+    const x = new Array(n).fill(0);
+    for (let r = n - 1; r >= 0; r--) { let s = M[r][n]; for (let k = r + 1; k < n; k++) s -= M[r][k] * x[k]; x[r] = s / M[r][r]; }
+    return x;
+  }
+  function inverse(A) { const n = A.length; const cols = []; for (let j = 0; j < n; j++) { const e = new Array(n).fill(0); e[j] = 1; cols.push(solve(A, e)); } return A.map((_, i) => cols.map((c) => c[i])); }
+
+  function loglik(t, w, prior) {
+    const n = t.length; let s = 0;
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) if (w[i][j]) s += w[i][j] * (t[i] - lse(t[i], t[j]));
+      s += prior * (t[i] - lse(t[i], 0)) + prior * (0 - lse(t[i], 0));
+    }
+    return s;
+  }
+  function gradHess(t, w, prior) {
+    const n = t.length, g = new Array(n).fill(0), H = t.map(() => new Array(n).fill(0));
+    for (let i = 0; i < n; i++) {
+      let gi = prior;
+      for (let j = 0; j < n; j++) {
+        if (j === i) continue;
+        const nij = w[i][j] + w[j][i];
+        gi += w[i][j];
+        if (!nij) continue;
+        const q = sig(t[i] - t[j]);
+        gi -= nij * q;
+        const v = nij * q * (1 - q);
+        H[i][i] += v; H[i][j] -= v;
+      }
+      const q0 = sig(t[i]);
+      gi -= 2 * prior * q0; H[i][i] += 2 * prior * q0 * (1 - q0);
+      g[i] = gi;
+    }
+    return { g, H }; /* H 是负海森（正定） */
+  }
+  function fit(w, prior) {
+    const n = w.length; let t = new Array(n).fill(0), it = 0, gmax = Infinity;
+    for (; it < 300; it++) {
+      const { g, H } = gradHess(t, w, prior);
+      gmax = Math.max(...g.map(Math.abs));
+      if (gmax < 1e-10) break;
+      const d = solve(H, g), L0 = loglik(t, w, prior);
+      let s = 1, nt;
+      for (;;) { nt = t.map((x, i) => x + s * d[i]); if (loglik(nt, w, prior) >= L0 - 1e-12 || s < 1e-10) break; s /= 2; }
+      t = nt;
+    }
+    const { H } = gradHess(t, w, prior);
+    return { theta: t, V: inverse(H), iterations: it, gmax };
+  }
+
+  function components(w) {
+    const n = w.length, seen = new Array(n).fill(-1); let c = 0;
+    for (let s = 0; s < n; s++) {
+      if (seen[s] >= 0) continue;
+      const st = [s]; seen[s] = c;
+      while (st.length) { const i = st.pop(); for (let j = 0; j < n; j++) if (seen[j] < 0 && (w[i][j] + w[j][i]) > 0) { seen[j] = c; st.push(j); } }
+      c++;
+    }
+    const out = []; for (let k = 0; k < c; k++) out.push(seen.map((v, i) => (v === k ? i : -1)).filter((i) => i >= 0));
+    return out;
+  }
+
+  const pct = (x) => { const v = Math.round(x * 100); return (v >= 100 ? '>99' : v <= 0 ? '<1' : String(v)) + '%'; }; /* 有限数据下从不写 100% / 0% */
+  const rpct = (x) => Math.round(x * 100) + '%'; /* 实际胜率：3 胜 0 负就是 100% */
+  const f0 = (x) => String(Math.round(x));
+  function rec(w, i, j) { return w[i][j] + ':' + w[j][i]; }
+
+  function calculate(inp) {
+    const P = parse(inp), n = P.n, w = P.w;
+    const F = fit(w, P.prior), th = F.theta, V = F.V;
+    const mean = th.reduce((a, b) => a + b, 0) / n;
+    const pl = P.names.map((name, i) => {
+      let wins = 0, losses = 0, oppW = 0;
+      for (let j = 0; j < n; j++) { wins += w[i][j]; losses += w[j][i]; }
+      const games = wins + losses, theta = th[i] - mean;
+      let v = 0; for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) v += ((a === i ? 1 : 0) - 1 / n) * ((b === i ? 1 : 0) - 1 / n) * V[a][b];
+      return { i, name, wins, losses, games, rate: wins / games, theta, score: BASE + SCALE * theta, vsMid: sig(theta), se: Math.sqrt(Math.max(0, v)) * SCALE, oppScore: 0, oppW };
+    });
+    pl.forEach((p) => { let s = 0; for (let j = 0; j < n; j++) s += (w[p.i][j] + w[j][p.i]) * pl[j].score; p.oppScore = s / p.games; });
+    const EPS = 1e-9;
+    pl.forEach((p) => {
+      p.rank = 1 + pl.filter((q) => q.theta > p.theta + EPS).length;
+      p.naiveRank = 1 + pl.filter((q) => q.rate > p.rate + 1e-12).length;
+    });
+    const order = pl.slice().sort((a, b) => (b.theta - a.theta) || (a.i - b.i)).map((p) => p.i);
+    const naiveOrder = pl.slice().sort((a, b) => (b.rate - a.rate) || (b.wins - a.wins) || (a.i - b.i)).map((p) => p.i);
+    const adj = [];
+    for (let k = 0; k + 1 < n; k++) {
+      const a = order[k], b = order[k + 1], diff = th[a] - th[b];
+      const se = Math.sqrt(Math.max(1e-300, V[a][a] + V[b][b] - 2 * V[a][b]));
+      const sure = Phi(diff / se);
+      adj.push({ a, b, diff, gap: diff * SCALE, se, sure, sep: diff > EPS && diff / se >= P.z, tie: diff <= EPS });
+    }
+    const prob = th.map((x) => th.map((y) => sig(x - y)));
+    const comps = components(w);
+    const r = { P, players: pl, order, naiveOrder, adj, prob, comps, fit: F };
+    r.summary = summarize(r); r.facts = factsOf(r);
+    return r;
+  }
+
+  function summarize(r) {
+    const P = r.P, pl = r.players, top = pl[r.order[0]], a0 = r.adj[0], sec = pl[a0.b];
+    let s;
+    if (a0.tie) s = '按交手算，' + top.name + '和' + sec.name + '并列第一，实力分都是 ' + f0(top.score) + '。';
+    else if (a0.sep) s = '按交手算，' + top.name + '坐第一（实力分 ' + f0(top.score) + '），和第二名' + sec.name + '分得开：' + top.name + '更强的把握约 ' + pct(a0.sure) + '。';
+    else s = '按交手算，' + top.name + '暂坐第一（实力分 ' + f0(top.score) + '），但和' + sec.name + '还分不出高下：' + top.name + '更强的把握约 ' + pct(a0.sure) + '，没到 ' + P.conf + '%。';
+    const ci = (i) => r.comps.findIndex((c) => c.indexOf(i) >= 0);
+    if (!a0.tie && ci(a0.a) !== ci(a0.b)) s += top.name + '和' + sec.name + '从没跟同一拨人交过手，这两位的先后只靠垫底局。';
+    const nt = pl[r.naiveOrder[0]];
+    if (nt.rank !== 1) {
+      s += '只看胜率会把' + nt.name + '排第一（' + rpct(nt.rate) + '），可按交手他排第 ' + nt.rank + '：他对手的平均实力分 ' + f0(nt.oppScore) + '，' + top.name + '的对手是 ' + f0(top.oppScore) + '。';
+    }
+    return s;
+  }
+  function factsOf(r) {
+    const P = r.P, pl = r.players, o = [];
+    o.push(P.n + ' 个人、' + P.games + ' 局（' + P.recs.length + ' 行记录）；每人先跟「中等水平」各赢各输 ' + P.prior + ' 局垫底，免得没输过的人分数冲到无穷大。');
+    o.push('实力分 1500 是这群人的平均；差 100 分，高的一方大约 64% 胜率，差 200 分大约 76%。');
+    if (P.n > 2) {
+      const hard = pl.slice().sort((a, b) => b.oppScore - a.oppScore || a.i - b.i);
+      o.push('对手最硬的是' + hard[0].name + '（对手平均 ' + f0(hard[0].oppScore) + ' 分），最轻松的是' + hard[hard.length - 1].name + '（' + f0(hard[hard.length - 1].oppScore) + ' 分）。胜率没算这个差别，交手模型算了。');
+    }
+    const few = pl.filter((p) => p.games <= 4).map((p) => p.name + '（' + p.games + ' 局）');
+    if (few.length) o.push('打得太少：' + few.join('、') + '，分数主要是垫底局撑着，名次别太当真。');
+    const moved = pl.filter((p) => p.rank !== p.naiveRank).length;
+    o.push(moved ? '和只看胜率比，有 ' + moved + ' 个人的名次变了。' : '这次和只看胜率排出来的名次一样。');
+    if (r.comps.length > 1) {
+      o.push('有 ' + r.comps.length + ' 拨人从没交过手（' + r.comps.map((c) => c.map((i) => pl[i].name).join('、')).join(' ／ ') + '），拨与拨之间的先后只靠垫底局，基本不可信。');
+    }
+    return o;
+  }
+
+  function addLine(text, a, b, x, y) { const t = String(text).replace(/\s+$/, ''); return t + '\n' + a + ' ' + x + ':' + y + ' ' + b + '（假设）'; }
+  const KMAX = 60;
+  function trial(inp, P, a, b, k) { const s = Object.assign({}, inp, { text: addLine(P.text, P.names[a], P.names[b], k, 0) }); return { s, r: calculate(s) }; }
+  function suggestions(inp, r) {
+    const P = r.P, pl = r.players, out = [];
+    /* 1) 头名还没坐稳：头名再赢第二名几局才分得开 */
+    const a0 = r.adj[0];
+    if (!a0.sep && !a0.tie) {
+      for (let k = 1; k <= KMAX; k++) {
+        const t = trial(inp, P, a0.a, a0.b, k);
+        if (t.r.order[0] === a0.a && t.r.adj[0].sep) {
+          out.push({ id: 'settle', k, text: pl[a0.a].name + '要坐稳第一（' + P.conf + '% 把握），还得再赢' + pl[a0.b].name + ' ' + k + ' 局（中间不输）。', apply: t.s });
+          break;
+        }
+      }
+    }
+    /* 2) 前几对分不出的相邻名次：后面那位再赢前面那位几局就换位 */
+    for (let k0 = 0; k0 < Math.min(3, r.adj.length) && out.length < 4; k0++) {
+      const ad = r.adj[k0];
+      if (ad.sep) continue;
+      for (let k = 1; k <= KMAX; k++) {
+        const t = trial(inp, P, ad.b, ad.a, k);
+        const x = t.r.players;
+        if (x[ad.b].theta > x[ad.a].theta + 1e-9) {
+          out.push({ id: 'flip' + k0, k, text: '如果' + pl[ad.b].name + '接下来赢' + pl[ad.a].name + ' ' + k + ' 局，' + pl[ad.b].name + '就排到' + pl[ad.a].name + '前面（第 ' + x[ad.b].rank + ' 名）。', apply: t.s });
+          break;
+        }
+      }
+    }
+    return out;
+  }
+
+  function csvCell(v) { const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+  const HEAD = ['座次', '名字', '实力分', '±', '对上中等水平胜率', '局数', '胜-负', '胜率', '只看胜率的名次', '对手平均实力分'];
+  function table(r) {
+    return r.order.map((i) => { const p = r.players[i]; return [p.rank, p.name, f0(p.score), f0(p.se), pct(p.vsMid), p.games, p.wins + '-' + p.losses, rpct(p.rate), p.naiveRank, f0(p.oppScore)]; });
+  }
+  function toCSV(r, stamp) {
+    const L = [['排个座次', '生成于 ' + stamp], ['结论', r.summary], [], HEAD];
+    table(r).forEach((x) => L.push(x));
+    const nm = r.order.map((i) => r.players[i].name);
+    L.push([], ['胜算（行赢列的概率）／实际战绩'].concat(nm));
+    r.order.forEach((i) => L.push([r.players[i].name].concat(r.order.map((j) => (i === j ? '' : pct(r.prob[i][j]) + '（' + rec(r.P.w, i, j) + '）')))));
+    L.push([], ['相邻名次', '实力分差', '前者更强的把握', '分得开（' + r.P.conf + '%）']);
+    r.adj.forEach((a) => L.push([r.players[a.a].name + ' vs ' + r.players[a.b].name, f0(a.gap), pct(a.sure), a.sep ? '是' : '否']));
+    return L.map((row) => row.map(csvCell).join(',')).join('\n') + '\n';
+  }
+  function toMD(r, stamp, sg) {
+    const o = [];
+    o.push('# 排个座次', '', '生成时间：' + stamp + '　默认例子为虚构', '', '**' + r.summary + '**', '');
+    r.facts.forEach((x) => o.push('- ' + x));
+    o.push('', '## 座次', '', '| ' + HEAD.join(' | ') + ' |', '|' + HEAD.map(() => '---').join('|') + '|');
+    table(r).forEach((x) => o.push('| ' + x.join(' | ') + ' |'));
+    o.push('', '## 相邻名次分不分得开（要求 ' + r.P.conf + '% 把握）', '');
+    r.adj.forEach((a) => o.push('- ' + r.players[a.a].name + ' 比 ' + r.players[a.b].name + ' 高 ' + f0(a.gap) + ' 分，更强的把握 ' + pct(a.sure) + '：' + (a.sep ? '分得开' : '分不出')));
+    if (sg && sg.length) { o.push('', '## 再打几局会怎样'); sg.forEach((s) => o.push('- ' + s.text)); }
+    o.push('', '## 前提', '',
+      '- Bradley–Terry 模型：A 赢 B 的概率 = 1 / (1 + e^(θB − θA))，用全部交手记录求最大似然；每人跟「中等水平」各赢各输 ' + r.P.prior + ' 局垫底。',
+      '- 假设每局独立、实力不随时间变、没有主客场与发挥起伏；「把握」是正态近似，不是严格检验。');
+    return o.join('\n') + '\n';
+  }
+
+  const DEFAULT = { prior: '1', conf: '90', text: [
+    '# 周末球馆，一行一对人（虚构）',
+    '老王 5:3 小李',
+    '老王 4:4 阿梅',
+    '小李 4:2 阿梅',
+    '老王 6:1 大刘',
+    '小李 5:2 大刘',
+    '阿梅 3:3 大刘',
+    '小周 7:1 阿杰（小周基本只跟阿杰打）',
+    '小周 1:2 大刘',
+    '大刘 4:2 阿杰',
+    '阿梅 5:1 阿杰'].join('\n') };
+  const PRESETS = [
+    ['默认：周末球馆六个人', DEFAULT],
+    ['新来的全胜了三局', { prior: '1', conf: '90', text: ['# 棋社（虚构）', '老陈 6:4 老何', '老何 5:5 小吴', '老陈 7:3 小吴', '新来的 胜 小吴', '新来的 胜 小吴', '新来的 胜 老何'].join('\n') }],
+    ['两拨人没交过手', { prior: '1', conf: '80', text: ['# 公司羽毛球，两个楼层（虚构）', '甲 6:2 乙', '乙 5:3 丙', '甲 4:1 丙', '丁 3:3 戊', '戊 6:2 己', '丁 5:2 己'].join('\n') }],
+    ['八个人打了一个赛季', { prior: '1', conf: '95', text: ['# 小区乒乓球一个赛季（虚构）', '老赵 12:8 老钱', '老赵 9:3 老孙', '老赵 7:5 老李', '老钱 10:6 老孙', '老钱 6:6 小周', '老孙 8:8 老李', '老孙 9:5 小吴', '老李 7:7 小周', '老李 10:4 小郑', '小周 8:4 小吴', '小周 11:3 小王', '小吴 9:7 小郑', '小吴 10:2 小王', '小郑 8:6 小王', '老钱 9:5 小郑', '老赵 13:1 小王'].join('\n') }]
+  ];
+
+  const api = { DEFAULT, PRESETS, rpct, parse, parseLine, calculate, suggestions, fit, loglik, gradHess, solve, inverse, components, sig, Phi, pct, f0, rec, addLine, toCSV, toMD, SCALE, BASE, ZONE, MAXP, MAXL, KMAX };
+  if (typeof module === 'object' && module.exports) module.exports = api; else root.AppCore = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+  </script>
+  <script>
+/* 排个座次 · 界面层 */
+(function () {
+  'use strict';
+  const C = window.AppCore;
+  const KEY = 'pecking-order:v1';
+  const LIM = { text: 20000, prior: 4, conf: 2 };
+  const copy = (o) => JSON.parse(JSON.stringify(o));
+  const DEFAULT = C.DEFAULT, PRESETS = C.PRESETS;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  let state = copy(DEFAULT);
+  let last = null;
+
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* 隐私模式忽略 */ } }
+  function load() {
+    try {
+      const o = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (!o || typeof o !== 'object' || Array.isArray(o)) return null;
+      const s = {};
+      for (const k of ['text', 'prior', 'conf']) { if (o[k] == null || typeof o[k] === 'object') return null; s[k] = String(o[k]).slice(0, LIM[k]); }
+      return s;
+    } catch (e) { return null; }
+  }
+  function fill() { $('text').value = state.text; $('prior').value = state.prior; $('conf').value = state.conf; }
+
+  function gapText(r, a) {
+    const p = r.players;
+    if (a.tie) return '和下一位并列：实力分一样';
+    return '高 ' + C.f0(a.gap) + ' 分，' + p[a.a].name + '更强的把握 ' + C.pct(a.sure) + (a.sep ? '：分得开' : '：还分不出（要 ' + r.P.conf + '%）');
+  }
+  function renderSeats(r) {
+    const p = r.players, top = Math.max(...p.map((x) => x.score)), bot = Math.min(...p.map((x) => x.score));
+    let h = '';
+    r.order.forEach((i, k) => {
+      const x = p[i], wpct = top === bot ? 100 : 8 + 92 * (x.score - bot) / (top - bot);
+      h += '<div class="seat" data-i="' + i + '"><div class="no">' + x.rank + '</div><div><div class="nm">' + esc(x.name) + '</div>' +
+        '<div class="sub">' + x.wins + ' 胜 ' + x.losses + ' 负（胜率 ' + C.rpct(x.rate) + '，只看胜率排第 ' + x.naiveRank + '）· 对手平均 ' + C.f0(x.oppScore) + ' 分</div>' +
+        '<div class="bar"><i style="width:' + wpct.toFixed(1) + '%"></i></div></div>' +
+        '<div class="sc">' + C.f0(x.score) + '<small>± ' + C.f0(x.se) + '</small></div></div>';
+      if (k < r.adj.length) { const a = r.adj[k]; h += '<div class="gap ' + (a.sep ? 'yes' : 'no') + '">' + esc(gapText(r, a)) + '</div>'; }
+    });
+    $('seats').innerHTML = h;
+  }
+  /* 斜线图：左 = 只看胜率的名次，右 = 交手名次；PNG 与 SVG 共用几何 */
+  function slopeGeom(r, W, rowH) {
+    const n = r.players.length, top = 30, nameW = Math.min(150, Math.max(70, W * 0.24));
+    return { n, top, rowH, xL: nameW + 34, xR: W - nameW - 34, nameW, H: top + n * rowH + 8, y: (k) => top + (k - 0.5) * rowH };
+  }
+  function trunc(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+  function renderSlope(r) {
+    const W = svgW(), small = W < 600, g = slopeGeom(r, W, small ? 30 : 32), fz = small ? 12 : 13, p = r.players;
+    const maxc = small ? 5 : 9;
+    let h = '<svg viewBox="0 0 ' + W + ' ' + g.H + '" role="img" aria-label="名次变化">';
+    h += '<text x="' + g.xL + '" y="16" text-anchor="middle" font-size="' + fz + '" fill="#6b6258">只看胜率</text>';
+    h += '<text x="' + g.xR + '" y="16" text-anchor="middle" font-size="' + fz + '" fill="#6b6258">按交手算</text>';
+    p.forEach((x) => {
+      const y1 = g.y(x.naiveRank), y2 = g.y(x.rank), d = x.rank - x.naiveRank;
+      const col = d < 0 ? '#3d6b4a' : d > 0 ? '#a0522d' : '#b9ad9c';
+      h += '<line x1="' + g.xL + '" y1="' + y1 + '" x2="' + g.xR + '" y2="' + y2 + '" stroke="' + col + '" stroke-width="' + (d ? 2.5 : 1.5) + '"/>';
+      h += '<circle cx="' + g.xL + '" cy="' + y1 + '" r="4" fill="' + col + '"/><circle cx="' + g.xR + '" cy="' + y2 + '" r="4" fill="' + col + '"/>';
+      h += '<text x="' + (g.xL - 10) + '" y="' + (y1 + 4) + '" text-anchor="end" font-size="' + fz + '" fill="#2a2622">' + esc(trunc(x.name, maxc)) + ' ' + x.naiveRank + '</text>';
+      h += '<text x="' + (g.xR + 10) + '" y="' + (y2 + 4) + '" font-size="' + fz + '" fill="#2a2622"' + (d ? ' font-weight="700"' : '') + '>' + x.rank + ' ' + esc(trunc(x.name, maxc)) + (d ? (d < 0 ? ' ↑' + (-d) : ' ↓' + d) : '') + '</text>';
+    });
+    h += '</svg>';
+    $('slope').innerHTML = h;
+  }
+  function renderGrid(r) {
+    const p = r.players, w = r.P.w;
+    let h = '<tr><th></th>' + r.order.map((j) => '<th title="' + esc(p[j].name) + '">' + esc(p[j].name) + '</th>').join('') + '</tr>';
+    r.order.forEach((i) => {
+      h += '<tr><th title="' + esc(p[i].name) + '">' + esc(p[i].name) + '</th>';
+      r.order.forEach((j) => {
+        if (i === j) { h += '<td class="self"></td>'; return; }
+        const pr = r.prob[i][j], played = w[i][j] + w[j][i];
+        const bg = 'hsl(' + (pr >= 0.5 ? 140 : 15) + ',45%,' + (96 - Math.abs(pr - 0.5) * 60).toFixed(0) + '%)';
+        h += '<td style="background:' + bg + '">' + C.pct(pr) + '<small>' + (played ? C.rec(w, i, j) : '—') + '</small></td>';
+      });
+      h += '</tr>';
+    });
+    $('grid').innerHTML = h;
+  }
+  function svgW() { const w = ($('out') && $('out').clientWidth) || 900; return Math.round(Math.max(320, Math.min(940, w - 30))); }
+  function sugList(sg) {
+    const box = $('sugs'); box.innerHTML = '';
+    sg.forEach((x) => {
+      const d = document.createElement('div'); d.className = 'sug';
+      d.innerHTML = '<span>' + esc(x.text) + '</span>';
+      const bt = document.createElement('button'); bt.textContent = '加进记录算'; bt.dataset.sug = x.id;
+      bt.addEventListener('click', () => { state = copy(x.apply); fill(); run(); });
+      d.appendChild(bt); box.appendChild(d);
+    });
+    $('sugCard').style.display = sg.length ? '' : 'none';
+  }
+  function run() {
+    [].forEach.call(document.querySelectorAll('.bad'), (e) => e.classList.remove('bad'));
+    try {
+      const r = C.calculate(state);
+      const sg = C.suggestions(state, r);
+      $('error').style.display = 'none'; $('out').style.display = '';
+      $('summary').textContent = r.summary;
+      $('facts').innerHTML = r.facts.map((f) => '<li>' + esc(f) + '</li>').join('');
+      last = { r, sg };
+      renderSeats(r); renderSlope(r); renderGrid(r); sugList(sg);
+    } catch (e) {
+      last = null;
+      if (e.field) { const el = $(e.field); if (el) el.classList.add('bad'); }
+      $('error').textContent = '排不了：' + e.message; $('error').style.display = 'block';
+      $('out').style.display = 'none';
+    }
+    save();
+  }
+
+  /* ── 导出 ── */
+  function stamp() { const d = new Date(), z = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()) + ' ' + z(d.getHours()) + ':' + z(d.getMinutes()); }
+  function download(name, blob) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
+  function wrap(g, t, w) {
+    const NOHEAD = '，。、；：！？）」』%·～';
+    const out = []; let line = [];
+    const toks = String(t).match(/[+±<>-]?[0-9][0-9,.:%/-]*|[A-Za-z_][A-Za-z0-9_.\-/]*|[\s\S]/g) || [];
+    const width = (a) => g.measureText(a.join('')).width;
+    for (const tk of toks) {
+      if (line.length && width(line.concat([tk])) > w) {
+        let carry = [tk];
+        while (line.length > 1 && (NOHEAD.indexOf(carry[0][0]) >= 0 || '（「『'.indexOf(line[line.length - 1]) >= 0)) carry.unshift(line.pop());
+        out.push(line.join(''));
+        line = carry; if (/^\s+$/.test(line[0])) line.shift();
+      } else line.push(tk);
+    }
+    if (line.length) out.push(line.join('')); return out;
+  }
+  function fitText(g, t, w) {
+    if (g.measureText(t).width <= w) return t;
+    let s = t; while (s.length > 1 && g.measureText(s + '…').width > w) s = s.slice(0, -1);
+    return s + '…';
+  }
+  function drawPNG(Lx) {
+    const r = Lx.r, p = r.players;
+    const Wd = 1080, H = 1350, X = 70, TW = 940;
+    const cv = document.createElement('canvas'); cv.width = Wd; cv.height = H;
+    const g = cv.getContext('2d'), FF = '"PingFang SC","Microsoft YaHei",sans-serif';
+    g.fillStyle = '#f1ede6'; g.fillRect(0, 0, Wd, H);
+    g.fillStyle = '#fffdf9'; g.fillRect(36, 36, Wd - 72, H - 72);
+    g.fillStyle = '#6b6258'; g.font = '24px ' + FF;
+    g.fillText(fitText(g, '排个座次 · ' + r.P.n + ' 人 ' + r.P.games + ' 局 · 要求 ' + r.P.conf + '% 把握', TW), X, 96);
+    g.fillStyle = '#2a2622'; g.font = 'bold 29px ' + FF;
+    let y = 146;
+    const sl = wrap(g, r.summary, TW);
+    if (sl.length > 5) { sl.length = 5; sl[4] = fitText(g, sl[4] + '……', TW); }
+    sl.forEach((l) => { g.fillText(l, X, y); y += 41; });
+    y += 12;
+    /* 座次 */
+    g.fillStyle = '#4a4038'; g.font = '22px ' + FF; g.fillText('座次', X, y); y += 14;
+    const n = r.order.length, rowH = n > 8 ? 50 : 60, top = Math.max(...p.map((x) => x.score)), bot = Math.min(...p.map((x) => x.score));
+    r.order.forEach((i, k) => {
+      const x = p[i], yy = y + k * rowH;
+      g.fillStyle = k % 2 ? '#fbf6ee' : '#f6efe4'; g.fillRect(X, yy, TW, rowH - 6);
+      g.fillStyle = '#7a3b2e'; g.font = 'bold 26px ' + FF; g.textAlign = 'center'; g.fillText(String(x.rank), X + 30, yy + rowH / 2 + 5); g.textAlign = 'left';
+      g.fillStyle = '#2a2622'; g.font = 'bold 22px ' + FF; g.fillText(fitText(g, x.name, 230), X + 64, yy + rowH / 2 - 2);
+      g.fillStyle = '#6b6258'; g.font = '15px ' + FF; g.fillText(x.wins + '胜' + x.losses + '负 · 胜率' + C.rpct(x.rate) + '（第' + x.naiveRank + '）', X + 64, yy + rowH / 2 + 18);
+      const bx = X + 340, bw = 420, f = top === bot ? 1 : 0.08 + 0.92 * (x.score - bot) / (top - bot);
+      g.fillStyle = '#efe6d8'; g.fillRect(bx, yy + rowH / 2 - 9, bw, 14); g.fillStyle = '#c08a5a'; g.fillRect(bx, yy + rowH / 2 - 9, bw * f, 14);
+      g.fillStyle = '#2a2622'; g.font = 'bold 24px ' + FF; g.textAlign = 'right'; g.fillText(C.f0(x.score), X + TW - 14, yy + rowH / 2 + 2);
+      g.fillStyle = '#6b6258'; g.font = '14px ' + FF; g.fillText('± ' + C.f0(x.se), X + TW - 14, yy + rowH / 2 + 20); g.textAlign = 'left';
+    });
+    y += n * rowH + 24;
+    /* 相邻名次 */
+    g.fillStyle = '#4a4038'; g.font = '22px ' + FF; g.fillText('相邻两位分没分开', X, y); y += 32;
+    g.font = '18px ' + FF;
+    for (const a of r.adj) {
+      if (y > H - 300) { g.fillStyle = '#6b6258'; g.fillText('……其余见 Markdown 报告', X, y); y += 28; break; }
+      g.fillStyle = a.sep ? '#3d6b4a' : '#a0522d';
+      const ls = wrap(g, (a.sep ? '✓ ' : '· ') + p[a.a].name + ' 比 ' + p[a.b].name + ' ' + gapText(r, a), TW);
+      ls.forEach((l, li) => g.fillText(l, X + (li ? 22 : 0), y + li * 26)); y += ls.length * 26 + 4;
+    }
+    if (Lx.sg.length && y < H - 220) {
+      y += 12; g.fillStyle = '#4a4038'; g.font = '22px ' + FF; g.fillText('再打几局会怎样', X, y); y += 32;
+      g.fillStyle = '#2a2622'; g.font = '18px ' + FF;
+      const lines = []; Lx.sg.slice(0, 3).forEach((x) => wrap(g, '· ' + x.text, TW).forEach((l) => lines.push(l)));
+      for (const l of lines) { if (y > H - 170) break; g.fillText(l, X, y); y += 27; }
+    }
+    if (y < H - 230) {
+      y += 12; g.fillStyle = '#4a4038'; g.font = '22px ' + FF; g.fillText('为什么这么排', X, y); y += 32;
+      g.font = '17px ' + FF;
+      for (const f of r.facts) { const ls = wrap(g, '· ' + f, TW); if (y + ls.length * 25 > H - 120) break; ls.forEach((l) => { g.fillText(l, X, y); y += 25; }); y += 3; }
+    }
+    g.fillStyle = '#6b6258'; g.font = '17px ' + FF;
+    wrap(g, 'Bradley–Terry 交手模型估算，每人垫底 ' + r.P.prior + ' 局；默认例子为虚构。名次只说明这批记录，不是真实水平的定论。', TW).forEach((l, i) => g.fillText(l, X, H - 94 + i * 25));
+    return Promise.resolve(cv);
+  }
+  function backup() {
+    const r = last.r;
+    return { app: '排个座次', version: 1, savedAt: stamp(), input: copy(state),
+      result: { summary: r.summary, games: r.P.games,
+        ranking: r.order.map((i) => { const x = r.players[i]; return { rank: x.rank, name: x.name, score: Math.round(x.score), se: Math.round(x.se), wins: x.wins, losses: x.losses, naiveRank: x.naiveRank, oppScore: Math.round(x.oppScore) }; }),
+        adjacent: r.adj.map((a) => ({ upper: r.players[a.a].name, lower: r.players[a.b].name, gap: Math.round(a.gap), sure: +a.sure.toFixed(4), separated: a.sep })) } };
+  }
+  function init() {
+    $('text').addEventListener('input', () => { state.text = $('text').value; run(); });
+    $('prior').addEventListener('input', () => { state.prior = $('prior').value; run(); });
+    $('conf').addEventListener('input', () => { state.conf = $('conf').value; run(); });
+    $('qadd').addEventListener('click', () => {
+      const a = $('qa').value.trim(), b = $('qb').value.trim(), x = $('qx').value.trim() || '0', y = $('qy').value.trim() || '0';
+      [$('qa'), $('qb'), $('qx'), $('qy')].forEach((e) => e.classList.remove('bad'));
+      let bad = null;
+      if (!a) bad = 'qa'; else if (!b || b === a) bad = 'qb'; else if (!/^\d{1,3}$/.test(x)) bad = 'qx'; else if (!/^\d{1,3}$/.test(y) || +x + +y === 0) bad = 'qy';
+      if (bad) { $(bad).classList.add('bad'); return; }
+      state.text = state.text.replace(/\s+$/, '') + '\n' + a + ' ' + (+x) + ':' + (+y) + ' ' + b;
+      fill(); run();
+    });
+    PRESETS.forEach((p) => {
+      const b = document.createElement('button'); b.className = 'ghost'; b.textContent = p[0];
+      b.addEventListener('click', () => { state = copy(p[1]); fill(); run(); });
+      $('presets').appendChild(b);
+    });
+    $('reset').addEventListener('click', () => { state = copy(DEFAULT); fill(); run(); });
+    $('dlCSV').addEventListener('click', () => { if (last) download('排个座次.csv', new Blob(['\ufeff' + C.toCSV(last.r, stamp())], { type: 'text/csv;charset=utf-8' })); });
+    $('dlMD').addEventListener('click', () => { if (last) download('排个座次.md', new Blob([C.toMD(last.r, stamp(), last.sg)], { type: 'text/markdown;charset=utf-8' })); });
+    $('dlJSON').addEventListener('click', () => { if (last) download('排个座次-备份.json', new Blob([JSON.stringify(backup(), null, 2)], { type: 'application/json' })); });
+    $('dlPNG').addEventListener('click', () => { if (last) drawPNG(last).then((cv) => cv.toBlob((b) => download('排个座次-1080x1350.png', b), 'image/png')); });
+    state = load() || copy(DEFAULT);
+    fill(); run();
+    let rt = 0; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (last) renderSlope(last.r); }, 150); });
+    window.__ex = { last: () => last, state: () => state, presets: PRESETS, DEFAULT };
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+
+  </script>
+</body>
+</html>
